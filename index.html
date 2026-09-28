@@ -981,6 +981,15 @@ body {
 }
 .btn-fail-ok:hover { transform: scale(1.06); box-shadow: 0 4px 24px rgba(255,58,58,0.5); }
 
+/* ─── Touch optimization ─── */
+.btn-start, .btn-continue, .btn-multi,
+.btn-stats, .btn-restart, .btn-fail-ok, .btn-close-stats,
+.numpad button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
 /* ─── Responsive ─── */
 @media (max-width: 768px) {
   /* 전자칠판 4인 분할: 세로 공간을 끝까지 채워 숫자 버튼을 화면 아래로 내림 */
@@ -2191,8 +2200,28 @@ function restartGame() {
 // ═══════════════════════════════════════════════════════════
 // 이벤트 바인딩
 // ═══════════════════════════════════════════════════════════
-els.btnStart.addEventListener('click', () => initGame(true));
-els.btnContinue.addEventListener('click', () => initGame(false));
+
+// 여러 명이 동시에(멀티터치) 눌러도 각자 반응하도록 pointerdown 으로 처리한다.
+// pointerdown 은 손가락(포인터)마다 독립적으로 발생하지만, click 은
+// primary 포인터(가장 먼저 닿은 손가락) 하나에만 생성되기 때문이다.
+function bindTap(el, fn) {
+  if (!el) return;
+  el.addEventListener('pointerdown', e => { e.preventDefault(); fn(e); }, { passive: false });
+  // 포인터 이벤트를 지원하지 않는 구형 터치 환경 대비
+  if (!window.PointerEvent) {
+    el.addEventListener('touchstart', e => { e.preventDefault(); fn(e); }, { passive: false });
+    el.addEventListener('click', fn);
+  }
+}
+
+// 시작 버튼처럼 한 번만 실행되어야 하는 동작용 (중복 실행 방지)
+let _started = false;
+function bindTapOnce(el, fn) {
+  bindTap(el, e => { if (_started) return; _started = true; fn(e); });
+}
+
+bindTapOnce(els.btnStart,    () => initGame(true));
+bindTapOnce(els.btnContinue, () => initGame(false));
 
 // iframe 안에서는 멀티 버튼 숨김, 단독 실행 시에만 노출
 const _btnMulti = document.getElementById('btnMulti');
@@ -2200,7 +2229,7 @@ if (IS_IN_IFRAME) {
   _btnMulti.classList.add('hidden');
   document.body.classList.add('embedded');
 } else {
-  _btnMulti.addEventListener('click', () => { window.location.href = 'multi.html'; });
+  bindTap(_btnMulti, () => { window.location.href = 'multi.html'; });
 }
 
 // 모바일에서 가상 키보드 방지
@@ -2257,15 +2286,15 @@ document.getElementById('bossNumpad').addEventListener('pointerdown', e => {
   }
 });
 
-els.btnOpenStats.addEventListener('click', openStats);
-els.btnCloseStats.addEventListener('click', closeStats);
-els.statsOverlay.addEventListener('click', e => {
+bindTap(els.btnOpenStats, openStats);
+bindTap(els.btnCloseStats, closeStats);
+els.statsOverlay.addEventListener('pointerdown', e => {
   if (e.target === els.statsOverlay) closeStats();
 });
 
-els.btnRestart.addEventListener('click', restartGame);
+bindTap(els.btnRestart, restartGame);
 
-els.btnFailOk.addEventListener('click', () => {
+bindTap(els.btnFailOk, () => {
   els.failOverlay.classList.remove('active');
   inputLocked = false;
   updateQuestion();
@@ -2274,7 +2303,7 @@ els.btnFailOk.addEventListener('click', () => {
   els.answerInput.focus();
 });
 
-els.btnBossDefeatOk.addEventListener('click', () => {
+bindTap(els.btnBossDefeatOk, () => {
   els.bossDefeatOverlay.classList.remove('active');
   updateQuestion();
   clearMessage();
